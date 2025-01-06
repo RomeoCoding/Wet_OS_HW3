@@ -1,6 +1,7 @@
 #ifndef __CUSTOM_ALLOCATOR__
 #define __CUSTOM_ALLOCATOR__
 
+
 /*=============================================================================
 * do no edit lines below!
 =============================================================================*/
@@ -13,6 +14,40 @@ void* customRealloc(void* ptr, size_t size);
 /*=============================================================================
 * do no edit lines above!
 =============================================================================*/
+
+//suggestion for block usage - feel free to change this
+typedef struct Block
+{
+    size_t size;
+    struct Block* next;
+    bool free;
+} Block;
+extern Block* blockList;
+
+
+/*
+========================
+==== Util functions ====
+========================
+*/
+
+//inline size_t alignSize(size_t size);
+/*static Block* findBestFitBlock(size_t size);
+static Block* extendHeapForBlock(size_t size);
+static void splitBlock(Block* block, size_t size);
+static void coalesceFreeBlocks();
+static void shrinkHeap();*/
+
+/*=============================================================================
+* Utility Functions
+=============================================================================*/
+inline size_t alignSize(size_t size);
+Block* findBestFitBlock(size_t size);
+Block* extendHeapForBlock(size_t size);
+void splitBlock(Block* block, size_t size);
+void coalesceFreeBlocks();
+void shrinkHeap();
+
 
 /*=============================================================================
 * if writing bonus - uncomment lines below
@@ -37,13 +72,5 @@ void* customRealloc(void* ptr, size_t size);
 /*=============================================================================
 * Block
 =============================================================================*/
-//suggestion for block usage - feel free to change this
-typedef struct Block
-{
-    size_t size;
-    struct Block* next;
-    bool free;
-} Block;
-extern Block* blockList;
 
 #endif // CUSTOM_ALLOCATOR
