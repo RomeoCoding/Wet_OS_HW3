@@ -1,10 +1,10 @@
 #ifndef __CUSTOM_ALLOCATOR__
 #define __CUSTOM_ALLOCATOR__
 
-
 /*=============================================================================
 * do no edit lines below!
 =============================================================================*/
+
 #include <stddef.h> //for size_t
 
 void* customMalloc(size_t size);
@@ -14,40 +14,6 @@ void* customRealloc(void* ptr, size_t size);
 /*=============================================================================
 * do no edit lines above!
 =============================================================================*/
-
-//suggestion for block usage - feel free to change this
-typedef struct Block
-{
-    size_t size;
-    struct Block* next;
-    bool free;
-} Block;
-extern Block* blockList;
-
-
-/*
-========================
-==== Util functions ====
-========================
-*/
-
-//inline size_t alignSize(size_t size);
-/*static Block* findBestFitBlock(size_t size);
-static Block* extendHeapForBlock(size_t size);
-static void splitBlock(Block* block, size_t size);
-static void coalesceFreeBlocks();
-static void shrinkHeap();*/
-
-/*=============================================================================
-* Utility Functions
-=============================================================================*/
-inline size_t alignSize(size_t size);
-Block* findBestFitBlock(size_t size);
-Block* extendHeapForBlock(size_t size);
-void splitBlock(Block* block, size_t size);
-void coalesceFreeBlocks();
-void shrinkHeap();
-
 
 /*=============================================================================
 * if writing bonus - uncomment lines below
@@ -63,6 +29,13 @@ void shrinkHeap();
 // void heapCreate();
 // void heapKill();
 
+/*==========================================================
+More includes
+==========================================================
+*/
+#include <string.h>
+#include <stdbool.h>
+#include <stdio.h>
 /*=============================================================================
 * defines
 =============================================================================*/
@@ -72,5 +45,29 @@ void shrinkHeap();
 /*=============================================================================
 * Block
 =============================================================================*/
+//suggestion for block usage - feel free to change this
 
+typedef struct Block
+{
+    size_t size;
+    struct Block* next;
+    struct Block* prev;
+    bool free;
+    char user_data[];
+} Block;
+
+typedef struct BlockList
+{
+    struct Block* head;
+    struct Block* tail;
+} BlockList;
+
+extern struct BlockList blocklist;
+
+// addtional functions 
+
+void* Find_And_Allocate(size_t size);
+struct Block* Find_Block_ptr(void* ptr);
+struct Block* Merge_Block(struct Block* block);
+bool Combine_with(struct Block* block);
 #endif // CUSTOM_ALLOCATOR
