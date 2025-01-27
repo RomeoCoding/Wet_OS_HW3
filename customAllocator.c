@@ -1,9 +1,6 @@
 #include "customAllocator.h"
 
-struct BlockList blockList={
-    .head=NULL,
-    .tail=NULL
-};
+static BlockList blockList = {NULL, NULL};
 
 void* customMalloc(size_t size)
 {
@@ -11,11 +8,13 @@ void* customMalloc(size_t size)
     {
         perror("<malloc error>: passed nonpositive size");
     }
-    size_t real_size = ALGIN_TO_MULT_OF_4(size);
-    void* ptr = Find_And_Allocate(size);
+    size_t real_size = ALIGN_TO_MULT_OF_4(size);
+    void* ptr = Find_And_Allocate(real_size);
     if(ptr == (void*)-1)
     {
         //error
+        printf("creating new block\n");
+        fflush(stdout);
          ptr = sbrk(sizeof(Block)+size);
          if(ptr == (void*)-1)
          {
@@ -87,11 +86,20 @@ void* customCalloc(size_t nmeb, size_t size)
 
 void* customRealloc(void* ptr, size_t size)
 {
+
+    if(ptr == NULL)
+    {
+        return customMalloc(size);
+    }
     struct Block* block = Find_Block_ptr(ptr);
     if(block == NULL)
     {
     //ptr doesnt exist
     //return error
+    }
+    if(size == block->size)
+    {
+        return (void*)(block->user_data);
     }
     size_t block_size = sizeof(struct Block);
     size_t current_size = block->size;
@@ -110,9 +118,6 @@ void* customRealloc(void* ptr, size_t size)
         {   
             memcpy(block,ptr,old_size);
         }
-
-    //   if( current - size >= sizeof(struct Block)  + 4)
-      //    {
         struct Block* new_block  = (struct Block*)(block + size);
         new_block -> next = block->next;
         new_block -> prev = block;
@@ -120,13 +125,13 @@ void* customRealloc(void* ptr, size_t size)
         new_block -> size = current_size - size - sizeof(struct Block);
         block -> next = new_block;
         block -> size = size;
-         // }
-       
+        return (void*)(block->user_data);
     }else{
-         void* ptr = customMalloc(size);
-         memcpy(ptr,block->user_data,block->size);
-         block->free = true;
-         Merge_Block(block);
+        void* ptr = customMalloc(size);
+        memcpy(ptr,block->user_data,block->size);
+        block->free = true;
+        Merge_Block(block);
+        return ptr;
     }
 
 }
@@ -144,9 +149,12 @@ void* customRealloc(void* ptr, size_t size)
 void* Find_And_Allocate(size_t size)
 {
 //find best fit
-    struct Block* block = blocklist.head;
-    struct Block* tail = blocklist.tail;
-
+    struct Block* block = blockList.head;
+    struct Block* tail = blockList.tail;
+    if(block == NULL)
+    {
+        return NULL;
+    }
     struct Block* min_block = NULL;
     size_t min_size = 0;
    
@@ -206,7 +214,6 @@ struct Block* Find_Block_ptr(void* ptr)
 {
     struct Block* block = blockList.head;
     struct Block* tail = blockList.tail;
-    size_t sizeofblock = sizeof(struct Block*);
     while( 1 )
     {
         if( (void*)(block->user_data) == ptr ) 
