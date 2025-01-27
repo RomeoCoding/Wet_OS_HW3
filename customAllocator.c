@@ -10,7 +10,7 @@ void* customMalloc(size_t size)
     }
     size_t real_size = ALIGN_TO_MULT_OF_4(size);
     void* ptr = Find_And_Allocate(real_size);
-    if(ptr == (void*)-1)
+    if(ptr == NULL)
     {
         //error
         printf("creating new block\n");
@@ -153,6 +153,8 @@ void* Find_And_Allocate(size_t size)
     struct Block* tail = blockList.tail;
     if(block == NULL)
     {
+        printf("creating\n");
+        fflush(stdout);
         return NULL;
     }
     struct Block* min_block = NULL;
