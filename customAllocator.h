@@ -74,8 +74,10 @@ typedef struct BlockList
 
 // addtional functions 
 
-void* Find_And_Allocate(size_t size);
+struct Block* Find_And_Allocate(size_t size);
 struct Block* Find_Block_ptr(void* ptr);
 struct Block* Merge_Block(struct Block* block);
 bool Combine_with(struct Block* block);
+struct Block* Allocate_Extenend_Heap(size_t size);
+struct Block* Find_BestFit(size_t size, struct Block* head);
 #endif // CUSTOM_ALLOCATOR
