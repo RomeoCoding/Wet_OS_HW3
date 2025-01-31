@@ -399,3 +399,142 @@ struct Block* Find_BestFit(size_t size, struct Block* head)
 
     return min_block;
 }
+
+/*
+===============================
+MULTITHREADED VERSION FOR BONUS
+===============================
+    */
+#define REGION_SIZE 4096  //4KB = 2^12 Bytes a region
+#define INITIAL_NUM_REGIONS 8  //we begin with 8 regions
+
+typedef struct HeapRegion {
+    Block* free_list;        
+    pthread_mutex_t lock;    
+    size_t available_space;  
+    size_t used_blocks;      
+} HeapRegion;
+
+HeapRegion* heap = NULL;  
+int NUM_REGIONS = INITIAL_NUM_REGIONS;
+
+void heapCreate(void) {
+    heap = malloc(NUM_REGIONS * sizeof(HeapRegion));
+    if (!heap) {
+        return;
+    }
+    
+    for (int i = 0; i < NUM_REGIONS; i++) {
+        heap[i].free_list = NULL;
+        heap[i].available_space = REGION_SIZE;
+        heap[i].used_blocks = 0;
+        pthread_mutex_init(&heap[i].lock, NULL);
+    }
+}
+
+void heapKill(void) {
+    for (int i = 0; i < NUM_REGIONS; i++) {
+        Block* current = heap[i].free_list;
+        if (current != NULL) {
+            Block* next;
+            do {
+                next = current->next;
+                free(current);
+                current = next;
+            } while (current != heap[i].free_list);
+        }
+        pthread_mutex_destroy(&heap[i].lock);
+    }
+    free(heap);  
+}
+
+int current_region = 0;
+
+void* customMTMalloc(size_t size) {
+    if (size > REGION_SIZE) {
+        return NULL;  
+    }
+
+    void* result = NULL;
+    int start_region = current_region;
+
+    while (result == NULL) {
+        HeapRegion* region = &heap[current_region];
+        pthread_mutex_lock(&region->lock);
+
+        Block* prev = NULL;
+        Block* curr = region->free_list;
+
+        if (curr != NULL) {
+            do {
+                if (curr->size >= size && curr->used == 0) {
+                    curr->used = 1;
+                    if (prev) {
+                        prev->next = curr->next;
+                    } else {
+                        region->free_list = curr->next != curr ? curr->next : NULL;
+                    }
+                    region->available_space -= size;
+                    result = (void*) (curr + 1);  
+                    break;
+                }
+                prev = curr;
+                curr = curr->next;
+            } while (curr != region->free_list);
+        }
+
+        //if no block found, we need to allocate a new region
+        if (result == NULL && region->available_space < size) {
+            NUM_REGIONS++;
+            heap = realloc(heap, NUM_REGIONS * sizeof(HeapRegion));
+            if (!heap) {
+                pthread_mutex_unlock(&region->lock);
+                return NULL;  
+            }
+
+            // Initialize the new region
+            HeapRegion* new_region = &heap[NUM_REGIONS - 1];
+            new_region->free_list = NULL;
+            new_region->available_space = REGION_SIZE;
+            new_region->used_blocks = 0;
+            pthread_mutex_init(&new_region->lock, NULL);
+
+            result = customMTMalloc(size);  
+        }
+
+        pthread_mutex_unlock(&region->lock);
+
+        //move to the next region in a round-robin manner
+        current_region = (current_region + 1) % NUM_REGIONS;
+        if (current_region == start_region) {
+            break;
+        }
+    }
+
+    return result;
+}
+
+void customMTFree(void* ptr) {
+    Block* block = (Block*)ptr - 1; 
+
+    for (int i = 0; i < NUM_REGIONS; i++) {
+        HeapRegion* region = &heap[i];
+        pthread_mutex_lock(&region->lock);
+
+        block->used = 0;
+        if (region->free_list == NULL) {
+            block->next = block;  
+        } else {
+            block->next = region->free_list;
+            Block* last = region->free_list;
+            while (last->next != region->free_list) {
+                last = last->next;
+            }
+            last->next = block; 
+        }
+        region->free_list = block;
+        region->available_space += block->size;
+
+        pthread_mutex_unlock(&region->lock);
+    }
+}
