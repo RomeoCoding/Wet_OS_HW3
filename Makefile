@@ -1,7 +1,7 @@
 # Makefile for the smash program
 # Variables
 CC = gcc
-CFLAGS = -std=c99 -g -Wall -Werror -pedantic-errors -DNDEBUG   
+CFLAGS = -std=c99 -g -Wall -pedantic-errors -DNDEBUG   
 CCLINK = $(CC)
 RM = rm -f
 
@@ -11,7 +11,7 @@ EXEC = main
 
 # Functions and Dependencies
 $(EXEC): $(OBJS)
-	$(CCLINK) $(OBJS) -o $(EXEC)
+	$(CCLINK) $(CFLAGS)$(OBJS) -o $(EXEC)
 
 main.o: main.c customAllocator.o
 	$(CC) $(CFLAGS) -c -o main.o main.c

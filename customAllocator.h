@@ -48,8 +48,10 @@ More includes
 */
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h> 
 #include <stdio.h>
 #include <unistd.h> 
+#include <errno.h>
 /*=============================================================================
 * Block
 =============================================================================*/
@@ -80,4 +82,6 @@ struct Block* Merge_Block(struct Block* block);
 bool Combine_with(struct Block* block);
 struct Block* Allocate_Extenend_Heap(size_t size);
 struct Block* Find_BestFit(size_t size, struct Block* head);
+void customFree(void* ptr);
+void Free_All_Memory();
 #endif // CUSTOM_ALLOCATOR

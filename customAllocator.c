@@ -7,6 +7,7 @@ void* customMalloc(size_t size)
     if(size <= 0)
     {
         perror("<malloc error>: passed nonpositive size");
+        return NULL;
     }
     size_t real_size = ALIGN_TO_MULT_OF_4(size);
     struct Block* new_block = Find_And_Allocate(real_size);
@@ -14,23 +15,29 @@ void* customMalloc(size_t size)
     {
         new_block = Allocate_Extenend_Heap(real_size);
     }
-    printf("memory %d \n",(int)real_size);
-    return (void*)new_block -> user_data;
+   // printf("memory %d \n",(int)real_size);
+       return new_block ? (void*)new_block->user_data : NULL;
 }
 
 
 
 void customFree(void* ptr)
 {
-
     if(ptr == NULL)
     {
         perror("<free error>: passed null pointer");
+        return;
     }
     struct Block* block = Find_Block_ptr(ptr);
     if(block == NULL)
     {
         perror("<free error>: cant find the pointer");
+        return;
+    }
+
+    if(block->free == true)
+    {
+        return;
     }
     
     block->free = true;
@@ -47,7 +54,17 @@ void customFree(void* ptr)
         {
             blockList.tail = NULL;
         }
-        sbrk(-(sizeof(struct Block) + block->size));
+        size_t release_size = sizeof(struct Block) + block->size;
+        void* temp = sbrk(-release_size);
+          if(temp  == (void*)-1)
+            {
+                if (errno == ENOMEM)
+                {
+                    perror("<sbrk/brk error>: out of memory");
+                    Free_All_Memory();
+                    exit(1);
+                }
+            }
     }
 
  }
@@ -59,16 +76,16 @@ void* customCalloc(size_t nmeb, size_t size)
 
     if( size<=0 || nmeb <=0 )
     {
-        //error
+        perror("<calloc error>: passed nonpositive value");
     }
     size_t total_size = nmeb*size;
     void *ptr = customMalloc(total_size);
     if(ptr == NULL)
     {
-        //error
+        return NULL;
     }
     struct Block* block=Find_Block_ptr(ptr);
-    memset(block->user_data,0,nmeb*size);
+    memset(block->user_data,0,total_size);
     return block->user_data;
 }
 
@@ -82,6 +99,11 @@ void* customRealloc(void* ptr, size_t size)
     {
         return customMalloc(size);
     }
+    if(size == 0)
+    {
+        customFree(ptr);
+        return NULL;
+    }
     size_t blocksize = sizeof(struct Block);
     struct Block* block = Find_Block_ptr(ptr);
 
@@ -90,27 +112,44 @@ void* customRealloc(void* ptr, size_t size)
         return NULL; //block doesnt exist
     }
 
+    size = ALIGN_TO_MULT_OF_4(size);
     size_t old_size = block->size;
-    block = Merge_Block(block);
-    size_t new_size = block->size;
-
+    //block = Merge_Block(block);
+    //size_t new_size = block->size;
+    if(size == old_size)
+    {
+        return ptr;
+    }
     
+    block = Merge_Block(block);
+    size_t new_size  = block->size;
+    block->free = false;
+   
     if(block->size == size) //incase the size are equal
     {
-        memcpy(block->user_data,ptr,old_size);
+        memmove(block->user_data,ptr,old_size);
         block->free = false;
         return (void*)(block->user_data);
     }
     if(block->user_data != ptr)
-        memcpy(block->user_data,ptr,old_size);
+        memmove(block->user_data,ptr,old_size);
 
-    if(block-> size > size)   //incase old size > size
+    if(block->size > size)   //incase old size > size
     {
         block->size = size;
         block->free = false;
         if(block == blockList.head)  //if the block is the final one (the head) then only decrease the progtam break
         {  
-            sbrk( size - block->size );
+            void* temp = sbrk( size - block->size );
+            if(temp  == (void*)-1)
+            {
+                if (errno == ENOMEM)
+                {
+                    perror("<sbrk/brk error>: out of memory");
+                    Free_All_Memory();
+                    exit(1);
+                }
+            }
             return (void*)(block->user_data);
         }else{
 
@@ -120,6 +159,10 @@ void* customRealloc(void* ptr, size_t size)
                 new_block->free = true;
                 new_block->size = new_size - size - blocksize;
                 new_block->next = block->next;
+                if(block->next)
+                {
+                    block->next->prev = new_block;
+                }
                 new_block->prev = block;
                 block->next = new_block;
             }else{
@@ -131,91 +174,36 @@ void* customRealloc(void* ptr, size_t size)
 
         if(block == blockList.head) //if it is at the head just extend the program break
         {
-            sbrk( size - block->size);
+            void* temp = sbrk( size - block->size);
+            if(temp  == (void*)-1)
+            {
+                if (errno == ENOMEM)
+                {
+                    perror("<sbrk/brk error>: out of memory");
+                    Free_All_Memory();
+                    exit(1);
+                }
+            }
+           
+           // total_sbrk += size-block->size;
             block->free = false;
+            block->size = size;
             return (void*)(block->user_data);
         }else{
             //move to new block
-            struct Block* new_block = (struct Block*)(customMalloc(size));
-            memcpy(new_block->user_data,block->user_data,old_size);
-            new_block->size = size;
-            new_block->free = false;
-            new_block->prev = blockList.head;
-            blockList.head->next = new_block; 
-            new_block->next = NULL;
-            blockList.head = new_block;
+            void* new_block_ptr=customMalloc(size);
+            Block* new_block = Find_Block_ptr(new_block_ptr);
+            memmove(new_block->user_data,block->user_data,old_size);
             block->free = true;
+            Merge_Block(block);
             return (void*)(new_block->user_data);
 
             }
         
     }
-    /*
 
-    if(ptr == NULL)
-    {
-        return customMalloc(size);
-    }
-    struct Block* block = Find_Block_ptr(ptr);
-    if(block == NULL)
-    {
-    //ptr doesnt exist
-    //return error
-    }
-    if(size == block->size)
-    {
-        return (void*)(block->user_data);
-    }
-    size_t block_size = sizeof(struct Block);
-    size_t current_size = block->size;
-    size_t old_size = block->size;
 
-    if(block->prev != NULL)
-    {
-        if( block->prev->free == true)
-            current_size += block->prev->size+ block_size;
-    }
-    if(block->next != NULL)
-    {
-        if( block->next->free == true)
-            current_size += block->next->size + block_size;
-    }
-
-    if(current_size >= size + block_size + 4)
-    {
-        block = Merge_Block(block);
-       if((void*)(block->user_data) != ptr)
-        {   
-            memcpy(block,ptr,old_size);
-        }
-        struct Block* new_block  = (struct Block*)(block->user_data + size);
-        new_block -> next = block->next;
-        new_block -> prev = block;
-        new_block -> free = true;
-        new_block -> size = current_size - size - sizeof(struct Block);
-        block -> next = new_block;
-        block -> size = size;
-        block -> free = false;
-        Merge_Block(new_block);
-        return (void*)(block->user_data);
-    }else{
-        if(block->next == NULL)
-        { 
-            block = Merge_Block(block);
-            sbrk(size + block_size + 4 - current_size);
-            block->size+= size + block_size + 4 - current_size;
-            memcpy(block,ptr,size);
-            return ptr;
-        }else {
-        struct Block* new_block = (struct Block*)(customMalloc(size));
-        memcpy(new_block->user_data,block->user_data,block->size);
-        block->free = true;
-        Merge_Block(block);
-        return ptr;
-        }
-        
-    }
-*/
+   
 }
 
 
@@ -260,6 +248,10 @@ struct Block* Find_Block_ptr(void* ptr)
 {
     struct Block* block = blockList.tail;
     struct Block* head = blockList.head;
+    if( blockList.head == NULL ||  blockList.tail == NULL)
+    {
+        return NULL;
+    }
     while( 1 )
     {
         if( (void*)(block->user_data) == ptr ) 
@@ -319,6 +311,10 @@ bool Combine_with(struct Block* block)
     }
 
     block->next=next_block->next;
+    if(next_block->next != NULL)
+    {
+        next_block->next->prev = block;
+    }
     block->size+=sizeof(struct Block) + next_block->size;
     return true;
 }
@@ -332,8 +328,13 @@ struct Block* Allocate_Extenend_Heap(size_t size)
     void* ptr = sbrk(sizeof(Block)+size);
     if(ptr == (void*)-1)    
     {   
-        perror("sbrk failed");
-        return NULL;
+        if (errno == ENOMEM) {
+            perror("<sbrk/brk error>: out of memory");
+            Free_All_Memory();
+            exit(1);
+        }else{
+            return NULL;
+        }
     }
     struct Block* block = (struct Block*)ptr;
     block->size = size;
@@ -351,6 +352,7 @@ struct Block* Allocate_Extenend_Heap(size_t size)
     if(blockList.tail == NULL)
     {
         blockList.tail = block;
+        blockList.tail -> prev = NULL;
     }
     return block;
 }
@@ -400,141 +402,22 @@ struct Block* Find_BestFit(size_t size, struct Block* head)
     return min_block;
 }
 
-/*
-===============================
-MULTITHREADED VERSION FOR BONUS
-===============================
-    */
-#define REGION_SIZE 4096  //4KB = 2^12 Bytes a region
-#define INITIAL_NUM_REGIONS 8  //we begin with 8 regions
 
-typedef struct HeapRegion {
-    Block* free_list;        
-    pthread_mutex_t lock;    
-    size_t available_space;  
-    size_t used_blocks;      
-} HeapRegion;
 
-HeapRegion* heap = NULL;  
-int NUM_REGIONS = INITIAL_NUM_REGIONS;
 
-void heapCreate(void) {
-    heap = malloc(NUM_REGIONS * sizeof(HeapRegion));
-    if (!heap) {
-        return;
+
+
+void Free_All_Memory()
+{
+    Block* block = blockList.head;
+    size_t size;
+    while(block->prev != NULL)
+    {
+        size=block->size;
+        block = block->prev;
+        sbrk(-sizeof(Block) + size);
+       
     }
-    
-    for (int i = 0; i < NUM_REGIONS; i++) {
-        heap[i].free_list = NULL;
-        heap[i].available_space = REGION_SIZE;
-        heap[i].used_blocks = 0;
-        pthread_mutex_init(&heap[i].lock, NULL);
-    }
-}
-
-void heapKill(void) {
-    for (int i = 0; i < NUM_REGIONS; i++) {
-        Block* current = heap[i].free_list;
-        if (current != NULL) {
-            Block* next;
-            do {
-                next = current->next;
-                free(current);
-                current = next;
-            } while (current != heap[i].free_list);
-        }
-        pthread_mutex_destroy(&heap[i].lock);
-    }
-    free(heap);  
-}
-
-int current_region = 0;
-
-void* customMTMalloc(size_t size) {
-    if (size > REGION_SIZE) {
-        return NULL;  
-    }
-
-    void* result = NULL;
-    int start_region = current_region;
-
-    while (result == NULL) {
-        HeapRegion* region = &heap[current_region];
-        pthread_mutex_lock(&region->lock);
-
-        Block* prev = NULL;
-        Block* curr = region->free_list;
-
-        if (curr != NULL) {
-            do {
-                if (curr->size >= size && curr->used == 0) {
-                    curr->used = 1;
-                    if (prev) {
-                        prev->next = curr->next;
-                    } else {
-                        region->free_list = curr->next != curr ? curr->next : NULL;
-                    }
-                    region->available_space -= size;
-                    result = (void*) (curr + 1);  
-                    break;
-                }
-                prev = curr;
-                curr = curr->next;
-            } while (curr != region->free_list);
-        }
-
-        //if no block found, we need to allocate a new region
-        if (result == NULL && region->available_space < size) {
-            NUM_REGIONS++;
-            heap = realloc(heap, NUM_REGIONS * sizeof(HeapRegion));
-            if (!heap) {
-                pthread_mutex_unlock(&region->lock);
-                return NULL;  
-            }
-
-            // Initialize the new region
-            HeapRegion* new_region = &heap[NUM_REGIONS - 1];
-            new_region->free_list = NULL;
-            new_region->available_space = REGION_SIZE;
-            new_region->used_blocks = 0;
-            pthread_mutex_init(&new_region->lock, NULL);
-
-            result = customMTMalloc(size);  
-        }
-
-        pthread_mutex_unlock(&region->lock);
-
-        //move to the next region in a round-robin manner
-        current_region = (current_region + 1) % NUM_REGIONS;
-        if (current_region == start_region) {
-            break;
-        }
-    }
-
-    return result;
-}
-
-void customMTFree(void* ptr) {
-    Block* block = (Block*)ptr - 1; 
-
-    for (int i = 0; i < NUM_REGIONS; i++) {
-        HeapRegion* region = &heap[i];
-        pthread_mutex_lock(&region->lock);
-
-        block->used = 0;
-        if (region->free_list == NULL) {
-            block->next = block;  
-        } else {
-            block->next = region->free_list;
-            Block* last = region->free_list;
-            while (last->next != region->free_list) {
-                last = last->next;
-            }
-            last->next = block; 
-        }
-        region->free_list = block;
-        region->available_space += block->size;
-
-        pthread_mutex_unlock(&region->lock);
-    }
+   
+    sbrk(-sizeof(Block) + block->size);
 }
