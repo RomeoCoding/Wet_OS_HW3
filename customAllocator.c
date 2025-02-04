@@ -31,7 +31,7 @@ void customFree(void* ptr)
     struct Block* block = Find_Block_ptr(ptr);
     if(block == NULL)
     {
-        perror("<free error>: cant find the pointer");
+       // perror("<free error>: cant find the pointer");
         return;
     }
 
@@ -79,6 +79,7 @@ void* customCalloc(size_t nmeb, size_t size)
         perror("<calloc error>: passed nonpositive value");
     }
     size_t total_size = nmeb*size;
+    total_size=ALIGN_TO_MULT_OF_4(total_size);
     void *ptr = customMalloc(total_size);
     if(ptr == NULL)
     {
@@ -415,9 +416,9 @@ void Free_All_Memory()
     {
         size=block->size;
         block = block->prev;
-        sbrk(-sizeof(Block) + size);
+        sbrk(-(sizeof(Block) + size));
        
     }
    
-    sbrk(-sizeof(Block) + block->size);
+    sbrk(-(sizeof(Block) + block->size));
 }
